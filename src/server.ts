@@ -312,14 +312,89 @@
 // });
 
 // export default app;
+// import express from 'express';
+// import dotenv from 'dotenv';
+// import mongoose from 'mongoose';
+// import authRoutes from './routes/auth';
+// import chatRoutes from './routes/chatRoutes'; // Import your chat routes
+// import cors from 'cors';
+// import http from 'http';
+// import { Server as SocketIOServer } from 'socket.io';
+
+// dotenv.config();
+
+// const app = express();
+// const PORT = process.env.PORT || 5000;
+
+// // Create HTTP server for Socket.io
+// const server = http.createServer(app);
+
+// // Initialize Socket.io server
+// const io = new SocketIOServer(server, {
+//   cors: {
+//     origin: 'http://localhost:3000', // Replace with your frontend URL
+//     methods: ['GET', 'POST'],
+//   },
+// });
+
+// app.use(cors({
+//   origin: 'http://localhost:3000', // Replace with your frontend URL
+// }));
+
+// // Middleware
+// app.use(express.json());
+
+// // Routes
+// app.use('/api/auth', authRoutes);
+// app.use('/api/chat', chatRoutes);
+// app.use('/api/users', chatRoutes); // Use chat routes
+
+// // MongoDB Connection
+// mongoose.connect(process.env.MONGO_URI!)
+//   .then(() => {
+//     console.log('MongoDB connected');
+//     server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+//   })
+//   .catch((error) => {
+//     console.error('MongoDB connection error:', error);
+//   });
+//   export const saveMessage = async (messageData: any) => {
+//     try {
+//       const Message = mongoose.model('Message');
+//       const message = new Message(messageData);
+//       await message.save();
+//       console.log('Message saved:', message);
+//       return message; // Return the saved message if needed
+//     } catch (error) {
+//       console.error('Error saving message:', error);
+//       throw error; // Re-throw error to handle it in calling code
+//     }
+//   };// Socket.io handling
+// io.on('connection', (socket) => {
+//   console.log(`User connected: ${socket.id}`);
+
+//   socket.on('sendMessage', async (message) => {
+//     console.log('Message received:', message);
+//     await saveMessage(message); // Save the message to the database
+//     io.emit('receiveMessage', message); // Emit the message to all connected clients
+//   });
+
+//   socket.on('disconnect', () => {
+//     console.log(`User disconnected: ${socket.id}`);
+//   });
+// });
+
+// export default app;
+
 import express from 'express';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import authRoutes from './routes/auth';
-import chatRoutes from './routes/chatRoutes'; // Import your chat routes
+import chatRoutes from './routes/chatRoutes';
 import cors from 'cors';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import Message from './models/message';
 
 dotenv.config();
 
@@ -341,13 +416,27 @@ app.use(cors({
   origin: 'http://localhost:3000', // Replace with your frontend URL
 }));
 
+
+app.set('io', io); // Attach the io instance to the app
+
+io.on('connection', (socket) => {
+  console.log('New socket connection:', socket.id);
+
+  socket.on('joinRoom', (chatId) => {
+    socket.join(chatId); // Join the specific chat room
+    console.log(`Socket ${socket.id} joined chat ${chatId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected:', socket.id);
+  });
+});
 // Middleware
 app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
-app.use('/api/users', chatRoutes); // Use chat routes
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI!)
@@ -358,27 +447,42 @@ mongoose.connect(process.env.MONGO_URI!)
   .catch((error) => {
     console.error('MongoDB connection error:', error);
   });
-  export const saveMessage = async (messageData: any) => {
-    try {
-      const Message = mongoose.model('Message');
-      const message = new Message(messageData);
-      await message.save();
-      console.log('Message saved:', message);
-      return message; // Return the saved message if needed
-    } catch (error) {
-      console.error('Error saving message:', error);
-      throw error; // Re-throw error to handle it in calling code
-    }
-  };// Socket.io handling
+
+// Save message function
+export const saveMessage = async (messageData: { chatId: string; sender: string; content: string; timestamp: Date }) => {
+  try {
+    const message = new Message(messageData);
+    await message.save();
+    console.log('Message saved:', message);
+    return message; // Return the saved message if needed
+  } catch (error) {
+    console.error('Error saving message:', error);
+    throw error; // Re-throw error to handle it in calling code
+  }
+};
+// Socket.io handling
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  socket.on('sendMessage', async (message) => {
-    console.log('Message received:', message);
-    await saveMessage(message); // Save the message to the database
-    io.emit('receiveMessage', message); // Emit the message to all connected clients
+  // Join a chat room when a user starts a chat
+  socket.on('joinChat', (chatId) => {
+    socket.join(chatId);
+    console.log(`User ${socket.id} joined chat ${chatId}`);
   });
 
+  // Handle message sending
+  socket.on('sendMessage', async (message) => {
+    console.log('Message received:', message);
+    try {
+      await saveMessage(message); // Save the message to the database
+      // Emit the message to the specific chat room
+      io.to(message.chatId).emit('receiveMessage', message);
+    } catch (error) {
+      console.error('Error handling message:', error);
+    }
+  });
+
+  // Handle user disconnect
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
   });

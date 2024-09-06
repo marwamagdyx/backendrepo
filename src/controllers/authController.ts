@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
-import Chat from '../models/chat';
+import {Chat} from '../models/chat';
 
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
@@ -54,7 +54,7 @@ export const register = async (req: Request, res: Response) => {
     }
 };
 export const login = async (req: Request, res: Response) => {
-  const { firstname,lastname,email, password } = req.body;
+  const { firstName,lastName,email, password } = req.body;
 
   try {
       // Check if user exists
